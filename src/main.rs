@@ -1,79 +1,55 @@
 use std::io;
-use std::path::Path;
 use winreg::enums::*;
 use winreg::RegKey;
 
 fn main() -> io::Result<()> {
     println!("Reading some system info...");
+    // last shutdown time
+    // Network and IP addresses
+    // type of network
+    // share of the systems and their configuration
+    // Get information about USER from SAM and System
+    // Last password change
+    // account created
+    // login count
+    // user ID
+
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let cur_ver = hklm.open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion")?;
-    let pf: String = cur_ver.get_value("ProgramFilesDir")?;
-    let dp: String = cur_ver.get_value("DevicePath")?;
-    println!("ProgramFiles = {}\nDevicePath = {}", pf, dp);
-    let info = cur_ver.query_info()?;
-    println!("info = {:?}", info);
-    let mt = info.get_last_write_time_system();
+
+    // get computer name
+    let cur_ver = hklm.open_subkey("SYSTEM\\ControlSet001\\Control\\ComputerName\\ComputerName")?;
+    let computer_name: String = cur_ver.get_value("ComputerName")?;
+    println!("Computer Name = {}", computer_name);
+
+    // get time zone
+    let cur_ver_tz = hklm.open_subkey("SYSTEM\\ControlSet001\\Control\\TimeZoneInformation")?;
+    let time_zone_name: String = cur_ver_tz.get_value("TimeZoneKeyName")?;
+    println!("Computer time zone = {}", time_zone_name);
+    let time_zone_bias: u32 = cur_ver_tz.get_value("ActiveTimeBias")?;
+    println!("UTC+{}", (time_zone_bias as i32) * -1);
+
+    // Get the status of the option NTFSdisableLastAccessUpdate
+    let ntfs_access_time = hklm.open_subkey("SYSTEM\\ControlSet001\\Control\\FileSystem")?;
+    let mut value_ntfs_last_access_update: u32 = ntfs_access_time
+        .get_value("NtfsDisableLastAccessUpdate")
+        .unwrap();
+    value_ntfs_last_access_update -= 2147483648;
+    println!("NTFS Last Access Time Stamp Updates");
+
+    let mut definition_value: String = "".to_string();
+    if value_ntfs_last_access_update == 0 {
+        definition_value = "User Managed, Last Access Time Updates Enabled".to_string();
+    } else if value_ntfs_last_access_update == 1 {
+        definition_value = "User Managed, Last Access Time Updates Disabled".to_string();
+    } else if value_ntfs_last_access_update == 2 {
+        definition_value = "System Managed, Last Access Time Updates Enabled (Default)".to_string();
+    } else if value_ntfs_last_access_update == 3 {
+        definition_value = "System Managed, Last Access Time Updates Disabled".to_string();
+    }
+
     println!(
-        "last_write_time as winapi::um::minwinbase::SYSTEMTIME = {}-{:02}-{:02} {:02}:{:02}:{:02}",
-        mt.wYear, mt.wMonth, mt.wDay, mt.wHour, mt.wMinute, mt.wSecond
+        "Value for NtfsDisableLastAccessUpdate = {} ({}).",
+        value_ntfs_last_access_update, definition_value
     );
-
-    println!("File extensions, registered in system:");
-    for i in RegKey::predef(HKEY_CLASSES_ROOT)
-        .enum_keys().map(|x| x.unwrap())
-        .filter(|x| x.starts_with("."))
-    {
-        println!("{}", i);
-    }
-
-    let system = RegKey::predef(HKEY_LOCAL_MACHINE)
-        .open_subkey("HARDWARE\\DESCRIPTION\\System")?;
-    for (name, value) in system.enum_values().map(|x| x.unwrap()) {
-        println!("{} = {:?}", name, value);
-    }
-
-    // enable `chrono` feature on `winreg` to make this work
-    // println!(
-    //     "last_write_time as chrono::NaiveDateTime = {}",
-    //     info.get_last_write_time_chrono()
-    // );
-
-    /*println!("And now lets write something...");
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let path = Path::new("Software").join("WinregRsExample1");
-    let (key, disp) = hkcu.create_subkey(&path)?;
-
-    match disp {
-        REG_CREATED_NEW_KEY => println!("A new key has been created"),
-        REG_OPENED_EXISTING_KEY => println!("An existing key has been opened"),
-    }
-
-    key.set_value("TestSZ", &"written by Rust")?;
-    let sz_val: String = key.get_value("TestSZ")?;
-    key.delete_value("TestSZ")?;
-    println!("TestSZ = {}", sz_val);
-
-    key.set_value("TestMultiSZ", &vec!["written", "by", "Rust"])?;
-    let multi_sz_val: Vec<String> = key.get_value("TestMultiSZ")?;
-    key.delete_value("TestMultiSZ")?;
-    println!("TestMultiSZ = {:?}", multi_sz_val);
-
-    key.set_value("TestDWORD", &1234567890u32)?;
-    let dword_val: u32 = key.get_value("TestDWORD")?;
-    println!("TestDWORD = {}", dword_val);
-
-    key.set_value("TestQWORD", &1234567891011121314u64)?;
-    let qword_val: u64 = key.get_value("TestQWORD")?;
-    println!("TestQWORD = {}", qword_val);
-
-    key.create_subkey("sub\\key")?;
-    hkcu.delete_subkey_all(&path)?;
-
-    println!("Trying to open nonexistent key...");
-    hkcu.open_subkey(&path).unwrap_or_else(|e| match e.kind() {
-        io::ErrorKind::NotFound => panic!("Key doesn't exist"),
-        io::ErrorKind::PermissionDenied => panic!("Access denied"),
-        _ => panic!("{:?}", e),
-    });*/
     Ok(())
 }
