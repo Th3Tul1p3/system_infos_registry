@@ -7,9 +7,6 @@ use winreg::RegValue;
 
 fn main() -> io::Result<()> {
     println!("Reading some system info...");
-    // Network and IP addresses
-    // type of network
-    // share of the systems and their configuration
     // Get information about USER from SAM and System
     // Last password change
     // account created
@@ -81,8 +78,40 @@ fn main() -> io::Result<()> {
     ))?;
     let shutdown_time: RegValue = control_windows.get_raw_value("ShutdownTime")?;
     let shutdown_time_iso = rawvalue_to_timestamp(shutdown_time.bytes);
-    println!("Last reboot {}", split_iso_timestamp(shutdown_time_iso));
+    println!("Last reboot  {}", split_iso_timestamp(shutdown_time_iso));
 
+    // Interfacs and their IP addresses
+    let interfaces = hklm.open_subkey(format!(
+        "{}{}{}",
+        "SYSTEM\\ControlSet00",
+        current.to_string(),
+        "\\Services\\Tcpip\\Parameters\\Interfaces"
+    ))?;
+    for interface in interfaces.enum_keys().map(|x| x.unwrap()) {
+        let subkey = interfaces.open_subkey(interface.clone()).unwrap();
+        for k in subkey.enum_keys().map(|x| x.unwrap()) {
+            println!("Interface GUID: {}", interface);
+            let sub_subkey = subkey.open_subkey(k).unwrap();
+            let dhcp_ip_address: String;
+            match sub_subkey.get_value("DhcpIPAddress") {
+                Ok(value) => {
+                    dhcp_ip_address = value;
+                    println!("DhcpIPAddress: {}", dhcp_ip_address);
+                }
+                Err(_e) => (),
+            };
+            let dhcp_domain: String;
+            match sub_subkey.get_value("DhcpDomain") {
+                Ok(value) => {
+                    dhcp_domain = value;
+                    println!("DhcpDomain: {}", dhcp_domain);
+                }
+                Err(_e) => (),
+            };
+        }
+    }
+
+    // Network and IP addresses and type of network
     Ok(())
 }
 
