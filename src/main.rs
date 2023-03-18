@@ -1,3 +1,4 @@
+use byteorder::{LittleEndian, ReadBytesExt};
 use datetime::*;
 use std::io;
 use std::time::Duration;
@@ -108,11 +109,77 @@ fn main() -> io::Result<()> {
                 }
                 Err(_e) => (),
             };
+            println!("");
         }
     }
 
     // Network and IP addresses and type of network
+    let network_signature = hklm.open_subkey(
+        "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Signatures\\Unmanaged",
+    )?;
+    let network_profiles =
+        hklm.open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Profiles")?;
+
+    for signature in network_signature.enum_keys().map(|x| x.unwrap()) {
+        let item = network_signature.open_subkey(signature.clone()).unwrap();
+    }
+
+    for profile in network_profiles.enum_keys().map(|x| x.unwrap()) {
+        let item = network_profiles.open_subkey(profile.clone()).unwrap();
+        let description: String = item.get_value("Description")?;
+        let profile_name: String = item.get_value("ProfileName")?;
+        let managed: u32 = item.get_value("Managed")?;
+        let date_created: RegValue = item.get_raw_value("DateCreated")?;
+        let date_last_connected: RegValue = item.get_raw_value("DateLastConnected")?;
+        let name_type: u32 = item.get_value("NameType")?;
+
+        println!("Description: {}", description);
+        println!("Profile Name: {}", profile_name);
+        println!("Managed: {}", (managed == 1));
+        print!("Date of creation: ");
+        bin_to_systemtime(date_created.bytes);
+        print!("Last Connection: ");
+        bin_to_systemtime(date_last_connected.bytes);
+
+        print!("Type of connection: ");
+        match name_type {
+            53 => println!("VPN"),
+            71 => println!("Wireless"),
+            _ => println!("unknow type"),
+        }
+        println!("");
+    }
     Ok(())
+}
+
+pub fn bin_to_systemtime(bin_value: Vec<u8>) {
+    let mut year: &[u8] = &[bin_value[0], bin_value[1]];
+    let year: u16 = year.read_u16::<LittleEndian>().unwrap();
+    let mut month: &[u8] = &[bin_value[2], bin_value[3]];
+    let month: u16 = month.read_u16::<LittleEndian>().unwrap();
+    let mut day_of_week: &[u8] = &[bin_value[4], bin_value[5]];
+    let num = day_of_week.read_u16::<LittleEndian>().unwrap();
+    let mut day: &[u8] = &[bin_value[6], bin_value[7]];
+    let day: u16 = day.read_u16::<LittleEndian>().unwrap();
+    let mut hour: &[u8] = &[bin_value[8], bin_value[9]];
+    let hour: u16 = hour.read_u16::<LittleEndian>().unwrap();
+    let mut minute: &[u8] = &[bin_value[10], bin_value[11]];
+    let minute: u16 = minute.read_u16::<LittleEndian>().unwrap();
+    let mut second: &[u8] = &[bin_value[12], bin_value[13]];
+    let second: u16 = second.read_u16::<LittleEndian>().unwrap();
+
+    print!("{:2}.{:2}.{:2} ", day, month, year);
+    match num {
+        0 => print!("Sun "),
+        1 => print!("Mon "),
+        2 => print!("Tue "),
+        3 => print!("Wed "),
+        4 => print!("Thu "),
+        5 => print!("Fri "),
+        6 => print!("Sat "),
+        _ => println!(""),
+    }
+    println!("{:2}:{:2}:{:2} ", hour, minute, second);
 }
 
 pub fn rawvalue_to_timestamp(tmp: Vec<u8>) -> LocalDateTime {
