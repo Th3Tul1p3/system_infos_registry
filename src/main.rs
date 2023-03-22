@@ -113,15 +113,8 @@ fn main() -> io::Result<()> {
     }
 
     // Network and IP addresses and type of network
-    let network_signature = hklm.open_subkey(
-        "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Signatures\\Unmanaged",
-    )?;
     let network_profiles =
         hklm.open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Profiles")?;
-
-    for signature in network_signature.enum_keys().map(|x| x.unwrap()) {
-        let item = network_signature.open_subkey(signature.clone()).unwrap();
-    }
 
     for profile in network_profiles.enum_keys().map(|x| x.unwrap()) {
         let item = network_profiles.open_subkey(profile.clone()).unwrap();
@@ -132,6 +125,7 @@ fn main() -> io::Result<()> {
         let date_last_connected: RegValue = item.get_raw_value("DateLastConnected")?;
         let name_type: u32 = item.get_value("NameType")?;
 
+        println!("Profile GUID: \t\t{}", profile);
         println!("Description: \t\t{}", description);
         println!("Profile Name: \t\t{}", profile_name);
         println!("Managed: \t\t{}", (managed == 1));
@@ -139,6 +133,44 @@ fn main() -> io::Result<()> {
         bin_to_systemtime(date_created.bytes);
         print!("Last Connection: \t");
         bin_to_systemtime(date_last_connected.bytes);
+
+        if managed == 1 {
+            let network_signature_managed = hklm.open_subkey(
+                "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Signatures\\Managed",
+            )?;
+
+            for signature in network_signature_managed.enum_keys().map(|x| x.unwrap()) {
+                let item = network_signature_managed
+                    .open_subkey(signature.clone())
+                    .unwrap();
+                let values: String = item.get_value("ProfileGuid").unwrap();
+                if values == profile {
+                    println!("{}", values);
+                    let mac = item.get_raw_value("DefaultGatewayMac").unwrap();
+                    println!("{} {:x?}", values, mac.bytes);
+                }
+            }
+        } else {
+            let network_signature_unmanaged = hklm.open_subkey(
+                "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Signatures\\Unmanaged",
+            )?;
+
+            for signature in network_signature_unmanaged.enum_keys().map(|x| x.unwrap()) {
+                let item = network_signature_unmanaged
+                    .open_subkey(signature.clone())
+                    .unwrap();
+                let values: String = item.get_value("ProfileGuid").unwrap();
+                if values == profile {
+                    let mac = item.get_raw_value("DefaultGatewayMac").unwrap().bytes;
+                    if mac.len() != 0 {
+                        println!(
+                            "DefaultGatewayMac: \t{:X?}-{:X?}-{:X?}-{:X?}-{:X?}-{:X?}",
+                            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+                        );
+                    }
+                }
+            }
+        }
 
         print!("Type of connection: \t");
         match name_type {
@@ -151,7 +183,7 @@ fn main() -> io::Result<()> {
         println!("");
     }
 
-    // get shares
+    // get shares details
     let lanman_server = hklm.open_subkey(format!(
         "{}{}{}",
         "SYSTEM\\ControlSet00",
@@ -163,17 +195,17 @@ fn main() -> io::Result<()> {
         let share_string = share.1.to_string().replace("\"", "");
         let share_arrays_values = share_string.split("\\n").collect::<Vec<&str>>();
         println!("{}", share.0);
-        for val in share_arrays_values.iter(){
+        for val in share_arrays_values.iter() {
             let val_split = val.split("=").collect::<Vec<&str>>();
             print!("{}:", val_split.get(0).unwrap());
-            if val_split.get(0).unwrap().len() < 7{
+            if val_split.get(0).unwrap().len() < 7 {
                 print!("\t\t");
-            }else{
+            } else {
                 print!("\t");
             }
-            if *val_split.get(0).unwrap() == "CSCFlags"{
+            if *val_split.get(0).unwrap() == "CSCFlags" {
                 print!("{}", val_split.get(1).unwrap());
-                let tmp : u32 = val_split.get(1).unwrap().parse::<u32>().unwrap();
+                let tmp: u32 = val_split.get(1).unwrap().parse::<u32>().unwrap();
                 match  tmp{
                     0 => println!(", By default the user needs to indicate the files that he wants to cache"),
                     16 => println!(", Automatic caching documents"),
@@ -182,7 +214,7 @@ fn main() -> io::Result<()> {
                     2048 => println!(", On Win 7 & 8 is the default setting until you disable “Simple file sharing” or use the “advanced” sharing option"),
                     768 => println!(", Shared Print devices"),
                     _ => println!(", unknow code"),
-                } 
+                }
                 continue;
             }
             println!("{}", val_split.get(1).unwrap());
