@@ -135,41 +135,12 @@ fn main() -> io::Result<()> {
         bin_to_systemtime(date_last_connected.bytes);
 
         if managed == 1 {
-            let network_signature_managed = hklm.open_subkey(
+            find_profile_guid_print_mac(
+                profile,
                 "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Signatures\\Managed",
-            )?;
-
-            for signature in network_signature_managed.enum_keys().map(|x| x.unwrap()) {
-                let item = network_signature_managed
-                    .open_subkey(signature.clone())
-                    .unwrap();
-                let values: String = item.get_value("ProfileGuid").unwrap();
-                if values == profile {
-                    println!("{}", values);
-                    let mac = item.get_raw_value("DefaultGatewayMac").unwrap();
-                    println!("{} {:x?}", values, mac.bytes);
-                }
-            }
+            );
         } else {
-            let network_signature_unmanaged = hklm.open_subkey(
-                "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Signatures\\Unmanaged",
-            )?;
-
-            for signature in network_signature_unmanaged.enum_keys().map(|x| x.unwrap()) {
-                let item = network_signature_unmanaged
-                    .open_subkey(signature.clone())
-                    .unwrap();
-                let values: String = item.get_value("ProfileGuid").unwrap();
-                if values == profile {
-                    let mac = item.get_raw_value("DefaultGatewayMac").unwrap().bytes;
-                    if mac.len() != 0 {
-                        println!(
-                            "DefaultGatewayMac: \t{:X?}-{:X?}-{:X?}-{:X?}-{:X?}-{:X?}",
-                            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
-                        );
-                    }
-                }
-            }
+            find_profile_guid_print_mac(profile, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Signatures\\Unmanaged");
         }
 
         print!("Type of connection: \t");
@@ -222,6 +193,27 @@ fn main() -> io::Result<()> {
     }
 
     Ok(())
+}
+
+pub fn find_profile_guid_print_mac(profile: String, path_to_hklm: &str) {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let network_signature_unmanaged = hklm.open_subkey(path_to_hklm).unwrap();
+
+    for signature in network_signature_unmanaged.enum_keys().map(|x| x.unwrap()) {
+        let item = network_signature_unmanaged
+            .open_subkey(signature.clone())
+            .unwrap();
+        let values: String = item.get_value("ProfileGuid").unwrap();
+        if values == profile {
+            let mac = item.get_raw_value("DefaultGatewayMac").unwrap().bytes;
+            if mac.len() != 0 {
+                println!(
+                    "DefaultGatewayMac: \t{:X?}-{:X?}-{:X?}-{:X?}-{:X?}-{:X?}",
+                    mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+                );
+            }
+        }
+    }
 }
 
 pub fn bin_to_systemtime(bin_value: Vec<u8>) {
