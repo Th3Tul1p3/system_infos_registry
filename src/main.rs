@@ -8,11 +8,6 @@ use winreg::RegValue;
 
 fn main() -> io::Result<()> {
     println!("---------- System profiling ----------");
-    // Get information about USER from SAM and System
-    // Last password change
-    // account created
-    // login count
-    // user ID
 
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
 
@@ -80,7 +75,10 @@ fn main() -> io::Result<()> {
     ))?;
     let shutdown_time: RegValue = control_windows.get_raw_value("ShutdownTime")?;
     let shutdown_time_iso = rawvalue_to_timestamp(shutdown_time.bytes);
-    println!("Last reboot (in fact restart) {}", split_iso_timestamp(shutdown_time_iso));
+    println!(
+        "Last reboot (in fact restart) {}",
+        split_iso_timestamp(shutdown_time_iso)
+    );
 
     // Interfacs and their IP addresses
     let interfaces = hklm.open_subkey(format!(
@@ -146,11 +144,51 @@ fn main() -> io::Result<()> {
         match name_type {
             53 => println!("VPN"),
             71 => println!("Wireless"),
-            // todo add other code 
+            6 => println!("Wired "),
+            23 => println!("Broadband (3g)"),
             _ => println!("unknow type"),
         }
         println!("");
     }
+
+    // get shares
+    let lanman_server = hklm.open_subkey(format!(
+        "{}{}{}",
+        "SYSTEM\\ControlSet00",
+        current.to_string(),
+        "\\Services\\LanmanServer\\Shares"
+    ))?;
+
+    for share in lanman_server.enum_values().map(|x| x.unwrap()) {
+        let share_string = share.1.to_string().replace("\"", "");
+        let share_arrays_values = share_string.split("\\n").collect::<Vec<&str>>();
+        println!("{}", share.0);
+        for val in share_arrays_values.iter(){
+            let val_split = val.split("=").collect::<Vec<&str>>();
+            print!("{}:", val_split.get(0).unwrap());
+            if val_split.get(0).unwrap().len() < 7{
+                print!("\t\t");
+            }else{
+                print!("\t");
+            }
+            if *val_split.get(0).unwrap() == "CSCFlags"{
+                print!("{}", val_split.get(1).unwrap());
+                let tmp : u32 = val_split.get(1).unwrap().parse::<u32>().unwrap();
+                match  tmp{
+                    0 => println!(", By default the user needs to indicate the files that he wants to cache"),
+                    16 => println!(", Automatic caching documents"),
+                    32 => println!(", Automatic caching documents (optimize for performance)"),
+                    48 => println!(", Cache is disabled"),
+                    2048 => println!(", On Win 7 & 8 is the default setting until you disable “Simple file sharing” or use the “advanced” sharing option"),
+                    768 => println!(", Shared Print devices"),
+                    _ => println!(", unknow code"),
+                } 
+                continue;
+            }
+            println!("{}", val_split.get(1).unwrap());
+        }
+    }
+
     Ok(())
 }
 
