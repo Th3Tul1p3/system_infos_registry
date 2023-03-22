@@ -7,7 +7,7 @@ use winreg::RegKey;
 use winreg::RegValue;
 
 fn main() -> io::Result<()> {
-    println!("Reading some system info...");
+    println!("---------- System profiling ----------");
     // Get information about USER from SAM and System
     // Last password change
     // account created
@@ -19,6 +19,7 @@ fn main() -> io::Result<()> {
     // current control set
     let select_current = hklm.open_subkey("SYSTEM\\Select")?;
     let current: u32 = select_current.get_value("Current")?;
+    println!("Current control set is {}", current);
 
     // get computer name
     let computername = hklm.open_subkey(format!(
@@ -28,7 +29,7 @@ fn main() -> io::Result<()> {
         "\\Control\\ComputerName\\ComputerName"
     ))?;
     let computer_name: String = computername.get_value("ComputerName")?;
-    println!("Computer Name = {}", computer_name);
+    println!("Computer Name: \t\t{}", computer_name);
 
     // get time zone
     let control_timezoneinformation = hklm.open_subkey(format!(
@@ -38,7 +39,7 @@ fn main() -> io::Result<()> {
         "\\Control\\TimeZoneInformation"
     ))?;
     let time_zone_name: String = control_timezoneinformation.get_value("TimeZoneKeyName")?;
-    print!("Computer time zone = {}", time_zone_name);
+    print!("Computer time zone: \t{}", time_zone_name);
     let time_zone_bias: u32 = control_timezoneinformation.get_value("ActiveTimeBias")?;
     println!(" UTC+{}", (time_zone_bias as i32) * -1);
 
@@ -79,7 +80,7 @@ fn main() -> io::Result<()> {
     ))?;
     let shutdown_time: RegValue = control_windows.get_raw_value("ShutdownTime")?;
     let shutdown_time_iso = rawvalue_to_timestamp(shutdown_time.bytes);
-    println!("Last reboot  {}", split_iso_timestamp(shutdown_time_iso));
+    println!("Last reboot (in fact restart) {}", split_iso_timestamp(shutdown_time_iso));
 
     // Interfacs and their IP addresses
     let interfaces = hklm.open_subkey(format!(
@@ -91,13 +92,13 @@ fn main() -> io::Result<()> {
     for interface in interfaces.enum_keys().map(|x| x.unwrap()) {
         let subkey = interfaces.open_subkey(interface.clone()).unwrap();
         for k in subkey.enum_keys().map(|x| x.unwrap()) {
-            println!("Interface GUID: {}", interface);
+            println!("Interface GUID: \t{}", interface);
             let sub_subkey = subkey.open_subkey(k).unwrap();
             let dhcp_ip_address: String;
             match sub_subkey.get_value("DhcpIPAddress") {
                 Ok(value) => {
                     dhcp_ip_address = value;
-                    println!("DhcpIPAddress: {}", dhcp_ip_address);
+                    println!("DhcpIPAddress: \t\t{}", dhcp_ip_address);
                 }
                 Err(_e) => (),
             };
@@ -105,7 +106,7 @@ fn main() -> io::Result<()> {
             match sub_subkey.get_value("DhcpDomain") {
                 Ok(value) => {
                     dhcp_domain = value;
-                    println!("DhcpDomain: {}", dhcp_domain);
+                    println!("DhcpDomain: \t\t{}", dhcp_domain);
                 }
                 Err(_e) => (),
             };
@@ -133,18 +134,19 @@ fn main() -> io::Result<()> {
         let date_last_connected: RegValue = item.get_raw_value("DateLastConnected")?;
         let name_type: u32 = item.get_value("NameType")?;
 
-        println!("Description: {}", description);
-        println!("Profile Name: {}", profile_name);
-        println!("Managed: {}", (managed == 1));
-        print!("Date of creation: ");
+        println!("Description: \t\t{}", description);
+        println!("Profile Name: \t\t{}", profile_name);
+        println!("Managed: \t\t{}", (managed == 1));
+        print!("Date of creation: \t");
         bin_to_systemtime(date_created.bytes);
-        print!("Last Connection: ");
+        print!("Last Connection: \t");
         bin_to_systemtime(date_last_connected.bytes);
 
-        print!("Type of connection: ");
+        print!("Type of connection: \t");
         match name_type {
             53 => println!("VPN"),
             71 => println!("Wireless"),
+            // todo add other code 
             _ => println!("unknow type"),
         }
         println!("");
